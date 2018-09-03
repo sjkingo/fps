@@ -64,32 +64,53 @@ asteroid_batch = pyglet.graphics.Batch()
 asteroids = get_asteroids()#batch=asteroid_batch)
 #asteroid_batch.draw()
 
-class Stars:
-    """
-    Background star field that "floats" across window.
-    TODO: dynamically add new sprites when the image scrolls off screen.
-    """
-
+class StarImage:
     def __init__(self, img, x, y):
         self.img = img
         self.x = x
         self.y = y
-        # move SE
-        self.dx = 4
-        self.dy = -self.dx
+        self.dx = 10
+        self.has_left = False
 
     def update(self, dt):
         self.x += self.dx * dt
-        self.y += self.dy * dt
 
     def draw(self):
         self.img.blit(self.x, self.y)
 
-stars = Stars(resource.image('star.jpg'), 0, 0)
+class StarImageField:
+    imgs = []
+
+    def __init__(self, img):
+        self.base_img = img
+        self.new(0, 0)
+
+    def new(self, x, y):
+        i = StarImage(self.base_img, x, y)
+        self.imgs.append(i)
+
+    def update(self, dt):
+        for i in list(self.imgs):
+            i.update(dt)
+            if i.x > 0 and not i.has_left:
+                self.new(-self.base_img.width + 100, i.y)
+                i.has_left = True
+            if i.has_left and i.x > self.base_img.width:
+                self.imgs.remove(i)
+
+    def draw(self):
+        for i in self.imgs:
+            i.draw()
+
+stars = StarImageField(resource.image('star.jpg'))
+
+# DEBUG
+bg = pyglet.sprite.Sprite(resource.image('white.png'), 0, 0)
 
 @window.event
 def on_draw():
     window.clear()
+    bg.draw()
     stars.draw()
     for asteroid in asteroids:
         asteroid.draw()
