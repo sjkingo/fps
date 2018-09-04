@@ -1,16 +1,12 @@
-import pyglet
-from pyglet.gl import *
 from pyglet import resource
-
+import pyglet
 import random
-
-window = pyglet.window.Window(
-    fullscreen=True,
-    caption='Game',
-)
 
 resource.path = ['fps/resources']
 resource.reindex()
+
+WINDOW_WIDTH = 0
+WINDOW_HEIGHT = 0
 
 def wrap(value, limit):
     if value > limit:
@@ -31,38 +27,19 @@ class MovingSprite(pyglet.sprite.Sprite):
         x = self.x + self.dx * dt
         y = self.y + self.dy * dt
         rotation = self.rotation + self.rotation_speed * dt
-        self.x = wrap(x, window.width)
-        self.y = wrap(y, window.height)
+        self.x = wrap(x, WINDOW_WIDTH)
+        self.y = wrap(y, WINDOW_HEIGHT)
         self.rotation = wrap(rotation, 360.0)
-
-asteroids_img = resource.image('asteroids.png')
-asteroids_grid = pyglet.image.ImageGrid(asteroids_img, 8, 8)
 
 class Asteroid(MovingSprite):
     MAX_ROTATION_SPEED = 20.0
 
-    def __init__(self, img, x, y, batch=None):
-        super().__init__(img, x, y, batch=batch)
+    def __init__(self, img, x, y):
+        super().__init__(img, x, y)
         self.dx = (random.random() - 0.5) * 25
         self.dy = (random.random() - 0.5) * 25
         self.rotation = random.random() * 360.0
-        #self.rotation_speed = (random.random() - 0.5) * self.MAX_ROTATION_SPEED
         self.rotation_speed = random.random() * self.MAX_ROTATION_SPEED
-
-def get_asteroids(num=10, batch=None):
-    asteroids = []
-    for i in range(num):
-        x = random.randint(0, window.width)
-        y = random.randint(0, window.height)
-        index = (random.randint(0, 7), random.randint(0, 7))
-        asteroid = Asteroid(img=asteroids_grid[index], x=x, y=y, batch=batch)
-        asteroid.rotation = random.randint(0, 360)
-        asteroids.append(asteroid)
-    return asteroids
-
-asteroid_batch = pyglet.graphics.Batch()
-asteroids = get_asteroids()#batch=asteroid_batch)
-#asteroid_batch.draw()
 
 class StarImage:
     def __init__(self, img, x, y):
@@ -102,26 +79,49 @@ class StarImageField:
         for i in self.imgs:
             i.draw()
 
-stars = StarImageField(resource.image('star.jpg'))
+class Game(pyglet.window.Window):
+    def __init__(self, *args, **kwargs):
+        num_asteroids = kwargs.pop('asteroids', 10)
 
-# DEBUG
-bg = pyglet.sprite.Sprite(resource.image('white.png'), 0, 0)
+        # super() must be called before setting dimmensions
+        super().__init__(*args, **kwargs)
+        WINDOW_WIDTH = self.width
+        WINDOW_HEIGHT = self.height
 
-@window.event
-def on_draw():
-    window.clear()
-    bg.draw()
-    stars.draw()
-    for asteroid in asteroids:
-        asteroid.draw()
-    #asteroid_batch.draw()
+        # set up sprites
+        self.bg = pyglet.sprite.Sprite(resource.image('white.png'), 0, 0)
+        self.stars = StarImageField(resource.image('star.jpg'))
+        self.asteroids = self.get_asteroids(num_asteroids)
 
-def update(dt):
-    stars.update(dt)
-    for asteroid in asteroids:
-        asteroid.update(dt)
+        pyglet.clock.schedule_interval(self.update, 1/120.0)
 
-pyglet.clock.schedule_interval(update, 1/120.0)
+    def on_draw(self):
+        self.clear()
+        self.bg.draw()
+        self.stars.draw()
+        for asteroid in self.asteroids:
+            asteroid.draw()
+
+    def update(self, dt):
+        self.stars.update(dt)
+        for asteroid in self.asteroids:
+            asteroid.update(dt)
+
+    def get_asteroids(self, num):
+        grid = pyglet.image.ImageGrid(resource.image('asteroids.png'), 8, 8)
+        asteroids = []
+        for i in range(num):
+            x = random.randint(0, self.width)
+            y = random.randint(0, self.height)
+            index = (random.randint(0, 7), random.randint(0, 7))
+            asteroid = Asteroid(img=grid[index], x=x, y=y)
+            asteroid.rotation = random.randint(0, 360)
+            asteroids.append(asteroid)
+        return asteroids
 
 def main():
+    window = Game(
+        fullscreen=True,
+        caption='Asteroids',
+    )
     pyglet.app.run()
