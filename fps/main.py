@@ -4,6 +4,7 @@ from pyglet.window import key, mouse
 import pyglet
 import random
 import sys
+import time
 
 resource.path = ['fps/resources']
 resource.reindex()
@@ -117,7 +118,7 @@ class Asteroid(MovingSprite, CollidableSprite, BaseSprite):
         """
         Asteroids should be deleted when they leave the viewport on the left side.
         """
-        if self.x <= 0:
+        if self.x <= -self.image.width:
             raise SpriteOutOfBounds()
 
 class StarImage:
@@ -200,6 +201,7 @@ class Ship(MovingSprite, CollidableSprite, BaseSprite):
 
 class Game(pyglet.window.Window):
     sprites = []
+    start_time = 0
 
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop('debug', False)
@@ -216,16 +218,24 @@ class Game(pyglet.window.Window):
         self.sprites.append(StarImageField(resource.image('star.jpg')))
 
         # 2. HUD
+        hud_padding = 40
         self.fps = pyglet.window.FPSDisplay(self)
         self.fps.label.y = WINDOW_HEIGHT - 40
+        self.elapsed_label = pyglet.text.Label(text='0', anchor_x='right',
+                x=WINDOW_WIDTH - 10, y=hud_padding)
 
         # 3. player ship
         self.ship = Ship(resource.image('ship.png'))
         self.push_handlers(self.ship.key_handler)
         self.sprites.append(self.ship)
 
+        self.start_time = time.time()
         pyglet.clock.schedule_once(self.new_asteroids, 1)
         pyglet.clock.schedule_interval(self.update, 1/120.0)
+
+    @property
+    def elapsed_time(self):
+        return time.time() - self.start_time
 
     def on_draw(self):
         self.clear()
@@ -235,6 +245,7 @@ class Game(pyglet.window.Window):
             if self.debug and hasattr(sprite, 'update_debug_label'):
                 sprite.update_debug_label()
 
+        self.elapsed_label.draw()
         self.fps.draw()
 
     def on_key_press(self, symbol, modifiers):
@@ -248,6 +259,8 @@ class Game(pyglet.window.Window):
             print('clicked', obj)
 
     def update(self, dt):
+        self.elapsed_label.text = str(round(self.elapsed_time, 2))
+
         for sprite in self.sprites:
             if hasattr(sprite, 'update'):
                 try:
@@ -277,7 +290,10 @@ class Game(pyglet.window.Window):
         return hits
 
     def new_asteroids(self, dt):
-        num = random.randint(0, 2)
+        if self.elapsed_time < 2:
+            num = 1
+        else:
+            num = random.randint(0, 2)
         self.sprites.extend(self.get_asteroids(num))
         pyglet.clock.schedule_once(self.new_asteroids, random.randint(4, 6))
 
