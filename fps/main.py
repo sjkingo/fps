@@ -211,16 +211,16 @@ class Game(pyglet.window.Window):
         WINDOW_WIDTH = self.width
         WINDOW_HEIGHT = self.height
 
-        # HUD
-        self.fps = pyglet.window.FPSDisplay(self)
-        self.fps.label = pyglet.text.Label(y=WINDOW_HEIGHT-20)
-
-        # set up sprites
+        # 1. set up static sprites: must be first (bottom layer)
         self.sprites.append(pyglet.sprite.Sprite(resource.image('white.png'), 0, 0))
         self.sprites.append(StarImageField(resource.image('star.jpg')))
-        #self.sprites.extend(self.get_asteroids(random.randint(1, 7)))
 
-        # player ship
+        # 2. HUD
+        self.fps = pyglet.window.FPSDisplay(self)
+        self.fps.label.y = WINDOW_HEIGHT - 40
+        #self.fps.label = pyglet.text.Label(x=WINDOW_WIDTH-50, y=50)
+
+        # 3. player ship
         self.ship = Ship(resource.image('ship.png'))
         self.push_handlers(self.ship.key_handler)
         self.sprites.append(self.ship)
@@ -230,12 +230,13 @@ class Game(pyglet.window.Window):
 
     def on_draw(self):
         self.clear()
-        self.fps.draw()
 
         for sprite in self.sprites:
             sprite.draw()
             if self.debug and hasattr(sprite, 'update_debug_label'):
                 sprite.update_debug_label()
+
+        self.fps.draw()
 
     def on_key_press(self, symbol, modifiers):
         if symbol == key.ESCAPE:
