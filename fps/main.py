@@ -18,9 +18,6 @@ def wrap(value, limit):
         value += limit
     return value
 
-def to_radians(degrees):
-    return math.pi * degrees / 180.0
-
 class Sprite(pyglet.sprite.Sprite):
     pass
 
@@ -29,18 +26,16 @@ class MovingSprite(Sprite):
     dy = 0
     rotation_speed = 0
 
-    def __init__(self, img, x, y, batch=None):
+    def __init__(self, img, x, y):
         self.radius = int(img.width / 2)
         self.linked_sprites = []
-        super().__init__(img, x, y, batch=batch)
+        super().__init__(img, x, y)
     
     def update(self, dt):
         x = int(self.x + self.dx * dt)
         y = int(self.y + self.dy * dt)
-        #rotation = self.rotation + self.rotation_speed * dt
         self.x = wrap(x, WINDOW_WIDTH)
         self.y = wrap(y, WINDOW_HEIGHT)
-        #self.rotation = wrap(rotation, 360.0)
 
         for sprite in self.linked_sprites:
             sprite.x = self.x + self.radius
@@ -66,9 +61,7 @@ class DebugInfoSprite:
             self._debug_label.text = self.debug_text
         else:
             self._debug_label = pyglet.text.Label(text=self.debug_text, 
-                    x=self.x, y=self.y,
-                    multiline=True, width=500)
-            print(self.x, self.y)
+                    x=self.x, y=self.y, multiline=True, width=500)
             self.linked_sprites.append(self._debug_label)
 
 class Asteroid(MovingSprite, DebugInfoSprite):
@@ -137,10 +130,10 @@ class Ship(MovingSprite, DebugInfoSprite):
 
         initial_x = WINDOW_WIDTH // 2
         initial_y = WINDOW_HEIGHT // 2
-        
-        super().__init__(img, initial_x, initial_y)
 
         self.key_handler = key.KeyStateHandler()
+        
+        super().__init__(img, initial_x, initial_y)
 
     def update(self, dt):
         if self.key_handler[key.LEFT]:
@@ -171,14 +164,13 @@ class Ship(MovingSprite, DebugInfoSprite):
 class Game(pyglet.window.Window):
     sprites = []
 
-    _obj_debug_labels = []
-
     def __init__(self, *args, **kwargs):
         num_asteroids = kwargs.pop('asteroids', 10)
         self.debug = kwargs.pop('debug', False)
 
         # super() must be called before setting dimmensions
         super().__init__(*args, **kwargs)
+
         global WINDOW_WIDTH, WINDOW_HEIGHT
         WINDOW_WIDTH = self.width
         WINDOW_HEIGHT = self.height
@@ -217,7 +209,6 @@ class Game(pyglet.window.Window):
         if button == mouse.LEFT:
             obj = self.check_collisions().get(x+y, None)
             if obj:
-                print('click at', obj, obj.x, obj.y)
                 obj.update_debug_label()
 
     def update(self, dt):
