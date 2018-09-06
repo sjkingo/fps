@@ -50,7 +50,7 @@ class BaseSprite(LinkedSprite, pyglet.sprite.Sprite):
     Provides a base class for sprites.
     """
 
-    debug_text = 'Update me in subclass'
+    debug_text = None
     debug_label = None
 
     def __init__(self, img, x, y):
@@ -60,6 +60,8 @@ class BaseSprite(LinkedSprite, pyglet.sprite.Sprite):
         super().__init__(img, x, y)
 
     def update_debug_label(self):
+        if not self.debug_text:
+            return
         if self.debug_label:
             self.debug_label.text = self.debug_text
         else:
@@ -159,17 +161,38 @@ class StarImageField:
         for i in self.imgs:
             i.draw()
 
+class Bullet(MovingSprite, BaseSprite):
+    debug_text = None
+    bullet_speed = 700.0
+
+    def __init__(self, *args, **kwargs):
+        img = resource.image('bullet.png')
+        super().__init__(img, *args, **kwargs)
+        self.dx = 500
+        #pyglet.clock.schedule_once(self.destroy, 0.5)
+
+    def destroy(self, dt):
+        pass
+
+    def check_bounds(self):
+        """
+        Bullets are deleted when they leave the viewport on right side.
+        """
+        if self.x >= WINDOW_WIDTH:
+            raise SpriteOutOfBounds()
+
 class Ship(MovingSprite, CollidableSprite, BaseSprite):
     max_speed = 200.0
+    fire_timeout = 0
 
-    def __init__(self, img):
+    def __init__(self, img, key_handler):
         initial_x = WINDOW_WIDTH // 6
         initial_y = WINDOW_HEIGHT // 2
 
         super().__init__(img, initial_x, initial_y)
 
         self.rotation = 90
-        self.key_handler = key.KeyStateHandler()
+        self.key_handler = key_handler
 
     def update(self, dt):
         if self.key_handler[key.UP]:
@@ -187,6 +210,8 @@ class Ship(MovingSprite, CollidableSprite, BaseSprite):
         if self.debug_label:
             self.update_debug_label()
 
+        self.fire_timeout -= dt
+
         super().update(dt)
 
     def check_bounds(self):
@@ -198,6 +223,13 @@ class Ship(MovingSprite, CollidableSprite, BaseSprite):
             self.dx = 0
         if self.y > WINDOW_HEIGHT or self.y < 0:
             self.dy = 0
+
+    def fire(self):
+        bullet = None
+        if self.fire_timeout <= 0:
+            self.fire_timeout = 0.1
+            bullet = Bullet(x=self.x, y=self.y)
+        return bullet
 
 class Game(pyglet.window.Window):
     sprites = []
@@ -213,6 +245,9 @@ class Game(pyglet.window.Window):
         WINDOW_WIDTH = self.width
         WINDOW_HEIGHT = self.height
 
+        self.key_handler = key.KeyStateHandler()
+        self.push_handlers(self.key_handler)
+
         # 1. set up static sprites: must be first (bottom layer)
         self.sprites.append(pyglet.sprite.Sprite(resource.image('white.png'), 0, 0))
         self.sprites.append(StarImageField(resource.image('star.jpg')))
@@ -226,7 +261,7 @@ class Game(pyglet.window.Window):
                 x=WINDOW_WIDTH - 10, y=hud_padding)
 
         # 3. player ship
-        self.ship = Ship(resource.image('ship.png'))
+        self.ship = Ship(resource.image('ship.png'), self.key_handler)
         self.push_handlers(self.ship.key_handler)
         self.sprites.append(self.ship)
 
@@ -262,6 +297,11 @@ class Game(pyglet.window.Window):
     def update(self, dt):
         self.elapsed_label.text = str(round(self.elapsed_time, 2))
 
+        if self.key_handler[key.SPACE]:
+            bullet = self.ship.fire()
+            if bullet:
+                self.sprites.append(bullet)
+
         for sprite in self.sprites:
             if hasattr(sprite, 'update'):
                 try:
@@ -285,7 +325,7 @@ class Game(pyglet.window.Window):
 
     def get_asteroids(self, num):
         """
-        Generate a number of asteroids at random right-side coords
+        Generate a number of asteroids sprites at random right-side coords
         and return them as  list.
         """
         asteroids = []
