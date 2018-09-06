@@ -216,6 +216,7 @@ class Game(pyglet.window.Window):
         # 1. set up static sprites: must be first (bottom layer)
         self.sprites.append(pyglet.sprite.Sprite(resource.image('white.png'), 0, 0))
         self.sprites.append(StarImageField(resource.image('star.jpg')))
+        self.asteroid_grid = pyglet.image.ImageGrid(resource.image('asteroids.png'), 8, 8)
 
         # 2. HUD
         hud_padding = 40
@@ -270,15 +271,28 @@ class Game(pyglet.window.Window):
                     self.sprites.remove(sprite)
                     print('Deleted', sprite, 'at', sprite.x, sprite.y)
 
+    def get_empty_coords(self, width, height):
+        """
+        Naive method for returning random right-side coords that
+        are not occupied by any other sprite.
+        """
+        while True:
+            x = WINDOW_WIDTH + (width * 2)
+            y = random.randint(height, WINDOW_HEIGHT - height)
+            hit = self.check_collisions().get(x+y, None)
+            if not hit:
+                return (x, y)
+
     def get_asteroids(self, num):
+        """
+        Generate a number of asteroids at random right-side coords
+        and return them as  list.
+        """
         asteroids = []
-        grid = pyglet.image.ImageGrid(resource.image('asteroids.png'), 8, 8)
         for i in range(num):
-            img = grid[(random.randint(0, 7), random.randint(0, 7))]
-            x = self.width + (img.width * 2)
-            y = random.randint(img.height, self.height-img.height)
-            asteroid = Asteroid(img=img, x=x, y=y)
-            asteroids.append(asteroid)
+            img = self.asteroid_grid[(random.randint(0, 7), random.randint(0, 7))]
+            x, y = self.get_empty_coords(img.width, img.height)
+            asteroids.append(Asteroid(img=img, x=x, y=y))
         return asteroids
 
     def check_collisions(self):
