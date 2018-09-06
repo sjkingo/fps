@@ -218,15 +218,14 @@ class Game(pyglet.window.Window):
         # 2. HUD
         self.fps = pyglet.window.FPSDisplay(self)
         self.fps.label.y = WINDOW_HEIGHT - 40
-        #self.fps.label = pyglet.text.Label(x=WINDOW_WIDTH-50, y=50)
 
         # 3. player ship
         self.ship = Ship(resource.image('ship.png'))
         self.push_handlers(self.ship.key_handler)
         self.sprites.append(self.ship)
 
-        pyglet.clock.schedule_interval(self.update, 1/60.0)
         pyglet.clock.schedule_once(self.new_asteroids, 1)
+        pyglet.clock.schedule_interval(self.update, 1/120.0)
 
     def on_draw(self):
         self.clear()
