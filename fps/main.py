@@ -12,8 +12,21 @@ resource.reindex()
 WINDOW_WIDTH = 0
 WINDOW_HEIGHT = 0
 
-class SpriteOutOfBounds(Exception):
+class SpriteException(Exception):
+    def __init__(self, obj):
+        self.obj = obj
+
+class SpriteOutOfBounds(SpriteException):
     pass
+
+class DeleteSprite(SpriteException):
+    pass
+
+class CollisionBetween(Exception):
+    def __init__(self, sprites, cell_pos):
+        self.sprites = sprites
+        self.cell_pos = cell_pos
+        self.message = f'Collision between {sprites} at cell {cell_pos}'
 
 class LinkedSprite:
     """
@@ -52,6 +65,7 @@ class BaseSprite(LinkedSprite, pyglet.sprite.Sprite):
 
     debug_text = None
     debug_label = None
+    pending_delete = False
 
     def __init__(self, img, x, y):
         self.radius = int(img.width / 2)
@@ -70,6 +84,10 @@ class BaseSprite(LinkedSprite, pyglet.sprite.Sprite):
             self.debug_label = pyglet.text.Label(text=self.debug_text, 
                     x=x, y=y, multiline=True, width=500)
             self.link(self.debug_label)
+    
+    def die(self, *args):
+        self.delete()
+        self.pending_delete = True
 
 class CollidableSprite(BaseSprite):
     """
@@ -112,7 +130,8 @@ class Asteroid(MovingSprite, CollidableSprite, BaseSprite):
     def __init__(self, img, x, y):
         super().__init__(img, x, y)
 
-        self.dx = -random.randint(10, 40)
+        #self.dx = -random.randint(10, 40)
+        self.dx = -100
         self.rotation = random.random() * 360.0
         self.rotation_speed = random.random() * self.max_rotation_speed
 
@@ -161,7 +180,7 @@ class StarImageField:
         for i in self.imgs:
             i.draw()
 
-class Bullet(MovingSprite, BaseSprite):
+class Bullet(MovingSprite, CollidableSprite, BaseSprite):
     debug_text = None
     bullet_speed = 700.0
 
@@ -169,17 +188,13 @@ class Bullet(MovingSprite, BaseSprite):
         img = resource.image('bullet.png')
         super().__init__(img, *args, **kwargs)
         self.dx = 500
-        #pyglet.clock.schedule_once(self.destroy, 0.5)
-
-    def destroy(self, dt):
-        pass
 
     def check_bounds(self):
         """
         Bullets are deleted when they leave the viewport on right side.
         """
         if self.x >= WINDOW_WIDTH:
-            raise SpriteOutOfBounds()
+            raise SpriteOutOfBounds(self)
 
 class Ship(MovingSprite, CollidableSprite, BaseSprite):
     max_speed = 200.0
@@ -233,6 +248,7 @@ class Ship(MovingSprite, CollidableSprite, BaseSprite):
 
 class Game(pyglet.window.Window):
     sprites = []
+    hits = None
     start_time = 0
 
     def __init__(self, *args, **kwargs):
@@ -291,8 +307,8 @@ class Game(pyglet.window.Window):
 
     def on_mouse_press(self, x, y, button, modifiers):
         if button == mouse.LEFT:
-            obj = self.check_collisions().get(x+y, None)
-            print('clicked', obj)
+            sprite = self.hits.get(x+y, None)
+            print('clicked', sprite)
 
     def update(self, dt):
         self.elapsed_label.text = str(round(self.elapsed_time, 2))
@@ -302,14 +318,18 @@ class Game(pyglet.window.Window):
             if bullet:
                 self.sprites.append(bullet)
 
-        for sprite in self.sprites:
-            if hasattr(sprite, 'update'):
-                try:
+        try:
+            for sprite in self.sprites:
+                if hasattr(sprite, 'update'):
                     sprite.update(dt)
-                except SpriteOutOfBounds:
-                    sprite.delete()
+                if getattr(sprite, 'pending_delete', False):
                     self.sprites.remove(sprite)
-                    print('Deleted', sprite, 'at', sprite.x, sprite.y)
+
+            self.update_collision_cells()
+        except (DeleteSprite, SpriteOutOfBounds) as e:
+            e.obj.delete()
+            self.sprites.remove(e.obj)
+            print('Deleted', e.obj, 'at', e.obj.x, e.obj.y)
 
     def get_empty_coords(self, width, height):
         """
@@ -319,7 +339,7 @@ class Game(pyglet.window.Window):
         while True:
             x = WINDOW_WIDTH + (width * 2)
             y = random.randint(height, WINDOW_HEIGHT - height)
-            hit = self.check_collisions().get(x+y, None)
+            hit = self.hits.get(x+y, None)
             if not hit:
                 return (x, y)
 
@@ -336,12 +356,23 @@ class Game(pyglet.window.Window):
         return asteroids
 
     def check_collisions(self):
+        for pos, sprites in self.hits.items():
+            if len(sprites) > 1:
+                raise CollisionBetween(sprites, pos)
+
+    def update_collision_cells(self):
         hits = {}
-        for sprite in self.sprites:
-            if hasattr(sprite, 'collision_cells'):
-                for x, y in sprite.collision_cells():
-                    hits[x+y] = sprite
-        return hits
+        for sprite in [s for s in self.sprites if hasattr(s, 'collision_cells')]:
+            for x, y in sprite.collision_cells():
+                i = x + y
+                occupies = hits.setdefault(i, set())
+                occupies.add(sprite)
+                if len(occupies) > 1:
+                    # prevent bullets from colliding with ourself
+                    if len(set([type(x) for x in occupies]) - {Ship, Bullet}) > 0:
+                        for sprite in occupies:
+                            sprite.die()
+        self.hits = hits
 
     def new_asteroids(self, dt):
         if self.elapsed_time < 2:
